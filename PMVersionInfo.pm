@@ -1,6 +1,6 @@
 package Win32::TieRegistry::PMVersionInfo;
 use strict;
-our $VERSION = sprintf("%d.%02d", q$Revision: 0.011 $ =~ /(\d+)\.(\d+)/);
+our $VERSION = 0.2;
 our $CHAT;
 
 =head1 NAME
@@ -9,19 +9,21 @@ Win32::TieRegistry::PMVersionInfo - store in Win32 Registry PM $VERSION info
 
 =head1 SYNOPSIS
 
-	use Win32::TieRegistry::PMVersionInfo;
-	Win32::TieRegistry::PMVersionInfo::CHAT = 1;
+	use Win32::TieRegistry::PMVersionInfo 0.2;
 
-	my $o = new Win32::TieRegistry::PMVersionInfo (
-		file_root	=> 'd:/src/pl/spc2xml/Version5/',
+	my $reg = new Win32::TieRegistry::PMVersionInfo (
+		file_root	=> "D:/src/pl/spc2xml/version5/",
+		ignore_dirs => ["Commercial/bin/",
+						"Commercial/SPC/XSLT/SourceForge",
+						"Commercial/SPC/XSLT/CSS",
+						"Commercial/SPC/XSLT/imgs",],
 		reg_root	=> 'LMachine/Software/LittleBits/',
-		strip_path	=> 'd:/src/pl/',
-		chat		=> 1,
+		strip_path	=> $strip_path,
+		chat=>1,
 	);
+	$reg->get;
+	$reg->store;
 
-	# $o->get_from_MANIFEST('D:/src/pl/spc2xml/Version5/MANIFEST','D:/src/pl/spc2xml/Version5/MANIFEST.SKIP');
-	$o->get;
-	$o->store;
 	exit;
 
 =head1 DESCRIPTION
@@ -79,6 +81,12 @@ Options are:
 
 The root at which to be begin parsing files.
 
+=item ignore_dirs
+
+An array of directories above the C<file_root> not to process.
+If any directory encountered matches at the beginning of one of
+these strings, it will not be processed.
+
 =item strip_path
 
 The text to strip from left-hand side of paths when storing in the registry.
@@ -123,6 +131,7 @@ sub new { my ($class) = (shift);
 	# Set default options that may be over-ridden
 	$self->{tree} = ();
 	$self->{file_root} = '';
+	$self->{ignore_dirs} = [];
 	$self->{reg_root} = '';
 	$self->{strip_path} = '';
 	$self->{filename_pattern} = '.*';
@@ -132,6 +141,9 @@ sub new { my ($class) = (shift);
 	foreach (keys %args) {	$self->{lc $_} = $args{$_} }
 	if (exists $self->{chat} and defined $self->{chat}){
 		$CHAT = 1;
+	}
+	if (ref $self->{ignore_dirs} ne 'ARRAY'){
+		carp "Not an array ref";
 	}
 	# Try to create the root key if it doesn't exist
 	$_ = $Registry->{ $self->{reg_root} };
@@ -145,7 +157,11 @@ sub new { my ($class) = (shift);
 Accepts an object reference, and optionally a directory to parse. Stores the names of all the files
 in the passed directory (or the calling object's C<file_root> slot),
 and recurses (calls itself) on all sub-directories. Incidentally returns the path to the
-directory operated on.
+directory operated upon.
+
+Will return without reiterating if the directory passed matches at the beginning of
+any string in the C<ignore_dirs> list (ie. the value in the object's C<file_root>
+plus C<@{$self->{ignore_dirs}}> slot).
 
 See L</CONSTRUCTOR> for details of how to effect exclusion of file and directory names.
 
@@ -157,6 +173,11 @@ sub get { my ($self,$dir) = (shift,shift);
 	local *DIR;
 	$dir = $self->{file_root} if not defined $dir;
 	croak "No \$self->{file_root} or passed dir to parse in method 'get'" if not defined $dir or $dir eq '';
+
+	# See if our dir, $dir, is in the ignore list, @{$self->{ignore_dirs}}
+	foreach (@{$self->{ignore_dirs}}){
+		warn "Ignoring $_\n" and return undef if $dir =~ /$self->{file_root}\/?$_/;
+	}
 
 	opendir DIR,$dir
 		or croak("Method get couldn't open process dir to get a file: <$dir>:\n $!.")
@@ -299,6 +320,11 @@ whether a file is not a directory.
 =head1 SEE ALSO
 
 L<ExtUtils::MakeMaker>, L<Win32::TieRegistry>.
+
+=head1 KEYWORDS
+
+Windows registry, perl module, version information, versions,
+recursion .
 
 =head1 AUTHOR
 
